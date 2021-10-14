@@ -61,6 +61,7 @@ import {
   getApplicationKeyInfo,
   extractAppKey,
   STX_WALLET_COMPATIBLE_SEED_STRENGTH,
+  DERIVATION_PATH,
   PaymentKeyInfoType,
   OwnerKeyInfoType,
   StacksKeyInfoType,
@@ -331,8 +332,16 @@ async function getPaymentKey(network: CLINetworkAdapter, args: string[]): Promis
  */
 async function getStacksWalletKey(network: CLINetworkAdapter, args: string[]): Promise<string> {
   const mnemonic = await getBackupPhrase(args[0]);
+  const derivationPathPrompt = await prompt([
+    {
+      type: 'input',
+      name: 'derivationPath',
+      message: `Enter custom derivation path or press enter to use the default (${DERIVATION_PATH}): `,
+    },
+  ]);
+  const derivationPath: string | undefined = derivationPathPrompt.derivationPath || undefined;
   // keep the return value consistent with getOwnerKeys
-  const keyObj = await getStacksWalletKeyInfo(network, mnemonic);
+  const keyObj = await getStacksWalletKeyInfo(network, mnemonic, derivationPath);
   const keyInfo: StacksKeyInfoType[] = [];
   keyInfo.push(keyObj);
   return JSONStringify(keyInfo);
@@ -355,7 +364,15 @@ async function makeKeychain(network: CLINetworkAdapter, args: string[]): Promise
     );
   }
 
-  const stacksKeyInfo = await getStacksWalletKeyInfo(network, mnemonic);
+  const derivationPathPrompt = await prompt([
+    {
+      type: 'input',
+      name: 'derivationPath',
+      message: `Enter custom derivation path or press enter to use the default (${DERIVATION_PATH}): `,
+    },
+  ]);
+  const derivationPath: string | undefined = derivationPathPrompt.derivationPath || undefined;
+  const stacksKeyInfo = await getStacksWalletKeyInfo(network, mnemonic, derivationPath);
   return JSONStringify({
     mnemonic: mnemonic,
     keyInfo: stacksKeyInfo,
@@ -1965,5 +1982,7 @@ export const testables =
     ? {
         addressConvert,
         contractFunctionCall,
+        makeKeychain,
+        getStacksWalletKey,
       }
     : undefined;
