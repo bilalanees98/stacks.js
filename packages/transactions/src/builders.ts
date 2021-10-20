@@ -23,6 +23,7 @@ import {
   publicKeyToAddress,
   pubKeyfromPrivKey,
   publicKeyFromBuffer,
+  createStacksPublicKey,
 } from './keys';
 
 import { TransactionSigner } from './signer';
@@ -603,12 +604,10 @@ export async function makeSTXTokenTransfer(
 /**
  * Contract deploy transaction options
  */
-export interface ContractDeployOptions {
+export interface BaseContractDeployOptions {
   contractName: string;
   /** the Clarity code to be deployed */
   codeBody: string;
-  /** a hex string of the private key of the transaction sender */
-  senderKey: string;
   /** transaction fee in microstacks */
   fee?: IntegerType;
   /** the transaction nonce, which must be increased monotonically with each new transaction */
@@ -625,6 +624,16 @@ export interface ContractDeployOptions {
   postConditions?: PostCondition[];
   /** set to true if another account is sponsoring the transaction (covering the transaction fee) */
   sponsored?: boolean;
+}
+
+export interface ContractDeployOptions extends BaseContractDeployOptions {
+  /** a hex string of the private key of the transaction sender */
+  senderKey: string;
+}
+
+export interface UnsignedContractDeployOptions extends BaseContractDeployOptions {
+  /** a hex string of the public key of the transaction sender */
+  publicKey: string;
 }
 
 /**
@@ -758,6 +767,75 @@ export async function makeContractDeploy(
   if (options.senderKey) {
     const signer = new TransactionSigner(transaction);
     signer.signOrigin(privKey);
+  }
+
+  return transaction;
+}
+
+export async function makeUnsignedContractDeploy(
+  txOptions: UnsignedContractDeployOptions
+): Promise<StacksTransaction> {
+  const defaultOptions = {
+    fee: BigInt(0),
+    nonce: BigInt(0),
+    network: new StacksMainnet(),
+    postConditionMode: PostConditionMode.Deny,
+    sponsored: false,
+  };
+
+  const options = Object.assign(defaultOptions, txOptions);
+
+  const payload = createSmartContractPayload(options.contractName, options.codeBody);
+
+  const addressHashMode = AddressHashMode.SerializeP2PKH;
+  const pubKey = createStacksPublicKey(options.publicKey);
+
+  let authorization = null;
+
+  const spendingCondition = createSingleSigSpendingCondition(
+    addressHashMode,
+    publicKeyToString(pubKey),
+    options.nonce,
+    options.fee
+  );
+
+  if (options.sponsored) {
+    authorization = createSponsoredAuth(spendingCondition);
+  } else {
+    authorization = createStandardAuth(spendingCondition);
+  }
+
+  const postConditions: PostCondition[] = [];
+  if (options.postConditions && options.postConditions.length > 0) {
+    options.postConditions.forEach(postCondition => {
+      postConditions.push(postCondition);
+    });
+  }
+
+  const lpPostConditions = createLPList(postConditions);
+  const transaction = new StacksTransaction(
+    options.network.version,
+    authorization,
+    payload,
+    lpPostConditions,
+    options.postConditionMode,
+    options.anchorMode,
+    options.network.chainId
+  );
+
+  if (txOptions.fee === undefined || txOptions.fee === null) {
+    const txFee = await estimateContractDeploy(transaction, options.network);
+    transaction.setFee(txFee);
+  }
+
+  if (txOptions.nonce === undefined || txOptions.nonce === null) {
+    const addressVersion =
+      options.network.version === TransactionVersion.Mainnet
+        ? AddressVersion.MainnetSingleSig
+        : AddressVersion.TestnetSingleSig;
+    const senderAddress = publicKeyToAddress(addressVersion, pubKey);
+    const txNonce = await getNonce(senderAddress, options.network);
+    transaction.setNonce(txNonce);
   }
 
   return transaction;
