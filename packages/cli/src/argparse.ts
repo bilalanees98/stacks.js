@@ -1994,24 +1994,13 @@ export const CLI_ARGS = {
           pattern: PRIVATE_KEY_PATTERN,
         },
         {
-          name: 'payment_key',
-          type: 'string',
-          realtype: 'private_key',
-          pattern: `${PRIVATE_KEY_PATTERN_ANY}`,
-        },
-        {
-          name: 'gaia_hub',
-          type: 'string',
-          realtype: 'url',
-        },
-        {
           name: 'zonefile',
           type: 'string',
           realtype: 'path',
         },
       ],
-      minItems: 4,
-      maxItems: 5,
+      minItems: 2,
+      maxItems: 3,
       help:
         'If you are trying to register a name for a *private key*, use this command.\n' +
         '\n' +

@@ -38,8 +38,12 @@ import {
   getAddressFromPrivateKey,
   TransactionVersion,
   AnchorMode,
+  pubKeyfromPrivKey,
+  publicKeyToString,
+  TransactionSigner,
+  createStacksPrivateKey,
 } from '@stacks/transactions';
-
+import { buildRegisterNameTx } from '@stacks/bns';
 import { StacksMainnet, StacksTestnet } from '@stacks/network';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -112,6 +116,7 @@ import {
 
 import { handleAuth, handleSignIn } from './auth';
 import { generateNewAccount, generateWallet, getAppPrivateKey } from '@stacks/wallet-sdk';
+import { makeProfileZoneFile } from '@stacks/profile';
 
 // global CLI options
 let txOnly = false;
@@ -1698,6 +1703,44 @@ function faucetCall(_: CLINetworkAdapter, args: string[]): Promise<string> {
     .catch((error: any) => error.toString());
 }
 
+async function register(_: CLINetworkAdapter, args: string[]): Promise<string | Buffer> {
+  const fullyQualifiedName = args[0];
+  const privateKey = args[1];
+  const zonefilePath = args[2];
+
+  const publicKey = publicKeyToString(pubKeyfromPrivKey(privateKey));
+  const network = _.isMainnet() ? new StacksMainnet() : new StacksTestnet();
+  const zonefile =
+    zonefilePath !== null ? makeProfileZoneFile(fullyQualifiedName, zonefilePath) : '';
+  //using first 20 chars of address as salt as it will be of fixed size, random and unique for each user
+  const stxAddress: string = c32check.b58ToC32(getPrivateKeyAddress(_, privateKey));
+  const salt = stxAddress.substr(0, 20);
+  const unsignedRegisterTx = await buildRegisterNameTx({
+    fullyQualifiedName,
+    publicKey,
+    salt,
+    zonefile,
+    network,
+  });
+
+  const registerSigner = new TransactionSigner(unsignedRegisterTx);
+  registerSigner.signOrigin(createStacksPrivateKey(privateKey));
+
+  return broadcastTransaction(registerSigner.transaction, network)
+    .then(response => {
+      if (response.hasOwnProperty('error')) {
+        return response;
+      }
+      return {
+        txid: `0x${registerSigner.transaction.txid()}`,
+        transaction: generateExplorerTxPageUrl(registerSigner.transaction.txid(), network),
+      };
+    })
+    .catch(error => {
+      return error.toString();
+    });
+}
+
 /* Print out all documentation on usage in JSON
  */
 type DocsArgsType = {
@@ -1784,6 +1827,7 @@ const COMMANDS: Record<string, CommandFunction> = {
   profile_store: profileStore,
   profile_verify: profileVerify,
   // 'send_btc': sendBTC,
+  register: register,
   send_tokens: sendTokens,
   stack: stack,
   stacking_status: stackingStatus,

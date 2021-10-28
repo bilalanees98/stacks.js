@@ -90,8 +90,10 @@
   "dependencies": {
     "@stacks/auth": "^2.0.1",
     "@stacks/blockchain-api-client": "^0.34.1",
+    "@stacks/bns": "^2.0.1",
     "@stacks/common": "^2.0.1",
     "@stacks/network": "^2.0.1",
+    "@stacks/profile": "^2.0.1",
     "@stacks/stacking": "^2.0.1",
     "@stacks/storage": "^2.0.1",
     "@stacks/transactions": "^2.0.1",
